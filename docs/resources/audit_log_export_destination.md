@@ -3,12 +3,12 @@
 page_title: "kernel_audit_log_export_destination Resource - Kernel"
 subcategory: ""
 description: |-
-  Kernel audit-log export destination. Kernel continuously delivers the organization's audit logs to an S3 bucket: its role, kernel_role_arn, assumes your role_arn with external_id as the sts:ExternalId condition. Destinations are organization-scoped, require an organization-scoped API key, and require a Kernel plan that includes audit logs. Delivery starts when the destination is activated; events recorded before activation or while paused are never exported. Replacing a destination issues a new external_id, so the role's trust policy has to be updated to match.
+  Kernel audit-log export destination. Kernel continuously delivers the organization's audit logs to an S3 bucket: its role, kernel_role_arn, assumes your role_arn with external_id as the sts:ExternalId condition. Destinations are organization-scoped, require an organization-scoped API key, and require a Kernel plan that includes audit logs. New destinations are paused. Create the destination, configure the role's trust policy using the computed values, verify destination access, then set status = "active" and apply again. Delivery starts when the destination is activated; events recorded before activation or while paused are never exported. Replacing a destination issues a new external_id, so the role's trust policy has to be updated to match.
 ---
 
 # kernel_audit_log_export_destination (Resource)
 
-Kernel audit-log export destination. Kernel continuously delivers the organization's audit logs to an S3 bucket: its role, `kernel_role_arn`, assumes your `role_arn` with `external_id` as the `sts:ExternalId` condition. Destinations are organization-scoped, require an organization-scoped API key, and require a Kernel plan that includes audit logs. Delivery starts when the destination is activated; events recorded before activation or while paused are never exported. Replacing a destination issues a new `external_id`, so the role's trust policy has to be updated to match.
+Kernel audit-log export destination. Kernel continuously delivers the organization's audit logs to an S3 bucket: its role, `kernel_role_arn`, assumes your `role_arn` with `external_id` as the `sts:ExternalId` condition. Destinations are organization-scoped, require an organization-scoped API key, and require a Kernel plan that includes audit logs. New destinations are paused. Create the destination, configure the role's trust policy using the computed values, verify destination access, then set `status = "active"` and apply again. Delivery starts when the destination is activated; events recorded before activation or while paused are never exported. Replacing a destination issues a new `external_id`, so the role's trust policy has to be updated to match.
 
 
 
@@ -26,7 +26,7 @@ Kernel audit-log export destination. Kernel continuously delivers the organizati
 
 - `format` (String) Object format. Only `jsonl.gz` is supported. Changing it replaces the destination.
 - `kms_key_id` (String) KMS key ID, alias, or ARN used to encrypt exported objects. Removing it clears the key.
-- `status` (String) `active` or `paused`. Pausing stops delivery, and resuming starts again from the time of the resume. When omitted, Terraform does not manage the status.
+- `status` (String) `active` or `paused`. Pausing stops delivery, and resuming starts again from the time of the resume. When omitted, Terraform does not manage the status and new destinations remain paused.
 - `type` (String) Destination type. Only `s3` is supported. Changing it replaces the destination.
 
 ### Read-Only

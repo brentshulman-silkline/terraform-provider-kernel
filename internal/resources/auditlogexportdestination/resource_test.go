@@ -140,7 +140,7 @@ func TestCreatePersistsState(t *testing.T) {
 	}
 }
 
-func TestCreatePausedDestinationPausesAfterCreate(t *testing.T) {
+func TestCreateActiveDestinationActivatesAfterCreate(t *testing.T) {
 	t.Parallel()
 
 	var gotID, gotBody string
@@ -152,12 +152,12 @@ func TestCreatePausedDestinationPausesAfterCreate(t *testing.T) {
 			gotID = id
 			gotBody = marshal(t, params)
 			return destinationResponse(t, func(d *kernel.AuditLogExportDestination) {
-				d.Status = kernel.AuditLogExportDestinationStatusPaused
+				d.Status = kernel.AuditLogExportDestinationStatusActive
 			})
 		},
 	})
 	plan := plannedModel(t)
-	plan.Status = types.StringValue("paused")
+	plan.Status = types.StringValue("active")
 	resp := &tfresource.CreateResponse{State: newState(t, nil)}
 
 	r.Create(context.Background(), tfresource.CreateRequest{Plan: newPlan(t, plan)}, resp)
@@ -165,36 +165,49 @@ func TestCreatePausedDestinationPausesAfterCreate(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotID != "dest_123" || gotBody != `{"status":"paused"}` {
-		t.Fatalf("update %q with %s, want dest_123 with status paused", gotID, gotBody)
+	if gotID != "dest_123" || gotBody != `{"status":"active"}` {
+		t.Fatalf("update %q with %s, want dest_123 with status active", gotID, gotBody)
 	}
-	if got := stateModel(t, resp.State).Status.ValueString(); got != "paused" {
-		t.Fatalf("status = %q, want paused", got)
+	if got := stateModel(t, resp.State).Status.ValueString(); got != "active" {
+		t.Fatalf("status = %q, want active", got)
 	}
 }
 
-func TestCreateKeepsStateWhenPauseFails(t *testing.T) {
+func TestCreateKeepsStateWhenActivationFails(t *testing.T) {
 	t.Parallel()
 
-	r := newResourceWithClient(fakeDestinationClient{
-		create: func(context.Context, kernel.AuditLogExportDestinationNewParams) (*kernel.AuditLogExportDestination, error) {
-			return destinationResponse(t, nil)
-		},
-		update: func(context.Context, string, kernel.AuditLogExportDestinationUpdateParams) (*kernel.AuditLogExportDestination, error) {
-			return nil, errors.New("connection reset")
-		},
-	})
-	plan := plannedModel(t)
-	plan.Status = types.StringValue("paused")
-	resp := &tfresource.CreateResponse{State: newState(t, nil)}
-
-	r.Create(context.Background(), tfresource.CreateRequest{Plan: newPlan(t, plan)}, resp)
-
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected status error")
+	tests := map[string]struct {
+		response *kernel.AuditLogExportDestination
+		err      error
+	}{
+		"transport error":    {err: errors.New("connection reset")},
+		"empty response":     {},
+		"malformed response": {response: &kernel.AuditLogExportDestination{ID: "dest_123"}},
 	}
-	if got := stateModel(t, resp.State).ID.ValueString(); got != "dest_123" {
-		t.Fatalf("state id = %q, want created dest_123 kept", got)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := newResourceWithClient(fakeDestinationClient{
+				create: func(context.Context, kernel.AuditLogExportDestinationNewParams) (*kernel.AuditLogExportDestination, error) {
+					return destinationResponse(t, nil)
+				},
+				update: func(context.Context, string, kernel.AuditLogExportDestinationUpdateParams) (*kernel.AuditLogExportDestination, error) {
+					return test.response, test.err
+				},
+			})
+			plan := plannedModel(t)
+			plan.Status = types.StringValue("active")
+			resp := &tfresource.CreateResponse{State: newState(t, nil)}
+
+			r.Create(context.Background(), tfresource.CreateRequest{Plan: newPlan(t, plan)}, resp)
+
+			if !resp.Diagnostics.HasError() {
+				t.Fatal("expected status error")
+			}
+			if got, want := stateModel(t, resp.State), model(t); got != want {
+				t.Fatalf("state = %+v, want created destination %+v kept", got, want)
+			}
+		})
 	}
 }
 
@@ -277,7 +290,7 @@ func TestReadRefreshesState(t *testing.T) {
 		get: func(ctx context.Context, id string) (*kernel.AuditLogExportDestination, error) {
 			gotID = id
 			return destinationResponse(t, func(d *kernel.AuditLogExportDestination) {
-				d.Status = kernel.AuditLogExportDestinationStatusPaused
+				d.Status = kernel.AuditLogExportDestinationStatusActive
 			})
 		},
 	})
@@ -289,11 +302,14 @@ func TestReadRefreshesState(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
+	if got := stateModel(t, resp.State).Prefix; !got.Equal(prior.Prefix) {
+		t.Fatalf("prefix = %v, want %v", got, prior.Prefix)
+	}
 	if gotID != "dest_123" {
 		t.Fatalf("get id = %q, want dest_123", gotID)
 	}
-	if got := stateModel(t, resp.State).Status.ValueString(); got != "paused" {
-		t.Fatalf("status = %q, want paused", got)
+	if got := stateModel(t, resp.State).Status.ValueString(); got != "active" {
+		t.Fatalf("status = %q, want active", got)
 	}
 }
 
@@ -347,7 +363,7 @@ func TestUpdateSendsPatch(t *testing.T) {
 		update: func(ctx context.Context, id string, params kernel.AuditLogExportDestinationUpdateParams) (*kernel.AuditLogExportDestination, error) {
 			gotID = id
 			gotBody = marshal(t, params)
-			return destinationResponse(t, func(d *kernel.AuditLogExportDestination) { d.Prefix = "audit/" })
+			return destinationResponse(t, func(d *kernel.AuditLogExportDestination) { d.Prefix = "audit" })
 		},
 	})
 	prior := model(t)

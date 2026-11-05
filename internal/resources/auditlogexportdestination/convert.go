@@ -1,6 +1,8 @@
 package auditlogexportdestination
 
 import (
+	"strings"
+
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	kernel "github.com/kernel/kernel-go-sdk"
@@ -48,7 +50,7 @@ func expandUpdate(plan, state destinationModel) kernel.AuditLogExportDestination
 
 // flatten builds state from a destination response, leaving out delivery
 // health fields such as last_error and consecutive_failures.
-func flatten(remote kernel.AuditLogExportDestination) (destinationModel, diag.Diagnostics) {
+func flatten(remote kernel.AuditLogExportDestination, prefix types.String) (destinationModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	required := []struct {
 		field, value string
@@ -87,6 +89,10 @@ func flatten(remote kernel.AuditLogExportDestination) (destinationModel, diag.Di
 		Status:        types.StringValue(string(remote.Status)),
 		ExternalID:    types.StringValue(remote.ExternalID),
 		KernelRoleARN: types.StringValue(remote.KernelRoleArn),
+	}
+	// Kernel strips trailing slashes; retain the configured spelling when equivalent.
+	if !prefix.IsNull() && !prefix.IsUnknown() && strings.TrimRight(prefix.ValueString(), "/") == remote.Prefix {
+		model.Prefix = prefix
 	}
 	if remote.KmsKeyID != "" {
 		model.KMSKeyID = types.StringValue(remote.KmsKeyID)

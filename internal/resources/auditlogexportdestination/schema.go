@@ -23,6 +23,7 @@ func destinationSchema() rschema.Schema {
 	return rschema.Schema{
 		MarkdownDescription: "Kernel audit-log export destination. Kernel continuously delivers the organization's audit logs to an S3 bucket: its role, `kernel_role_arn`, assumes your `role_arn` with `external_id` as the `sts:ExternalId` condition. " +
 			"Destinations are organization-scoped, require an organization-scoped API key, and require a Kernel plan that includes audit logs. " +
+			"New destinations are paused. Create the destination, configure the role's trust policy using the computed values, verify destination access, then set `status = \"active\"` and apply again. " +
 			"Delivery starts when the destination is activated; events recorded before activation or while paused are never exported. " +
 			"Replacing a destination issues a new `external_id`, so the role's trust policy has to be updated to match.",
 		Attributes: map[string]rschema.Attribute{
@@ -84,7 +85,7 @@ func destinationSchema() rschema.Schema {
 			"status": rschema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "`active` or `paused`. Pausing stops delivery, and resuming starts again from the time of the resume. When omitted, Terraform does not manage the status.",
+				MarkdownDescription: "`active` or `paused`. Pausing stops delivery, and resuming starts again from the time of the resume. When omitted, Terraform does not manage the status and new destinations remain paused.",
 				Validators: []validator.String{
 					stringvalidator.OneOf(statusActive, statusPaused),
 				},

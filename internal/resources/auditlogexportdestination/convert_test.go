@@ -17,9 +17,9 @@ const remoteDestination = `{
   "format": "jsonl.gz",
   "bucket": "audit-bucket",
   "region": "us-east-1",
-  "prefix": "kernel/",
+  "prefix": "kernel",
   "role_arn": "arn:aws:iam::123456789012:role/kernel-audit",
-  "status": "active",
+  "status": "paused",
   "external_id": "ext_123",
   "kernel_role_arn": "arn:aws:iam::999999999999:role/kernel-exporter",
   "consecutive_failures": 3,
@@ -49,7 +49,7 @@ func model(t *testing.T) destinationModel {
 		Prefix:        types.StringValue("kernel/"),
 		RoleARN:       types.StringValue("arn:aws:iam::123456789012:role/kernel-audit"),
 		KMSKeyID:      types.StringNull(),
-		Status:        types.StringValue("active"),
+		Status:        types.StringValue("paused"),
 		ExternalID:    types.StringValue("ext_123"),
 		KernelRoleARN: types.StringValue("arn:aws:iam::999999999999:role/kernel-exporter"),
 	}
@@ -126,11 +126,11 @@ func TestExpandUpdateSendsOnlyChangedFields(t *testing.T) {
 			},
 			want: `{"kms_key_id":""}`,
 		},
-		"pause": {
+		"activate": {
 			mutate: func(plan, _ *destinationModel) {
-				plan.Status = types.StringValue("paused")
+				plan.Status = types.StringValue("active")
 			},
-			want: `{"status":"paused"}`,
+			want: `{"status":"active"}`,
 		},
 		"unknown status": {
 			mutate: func(plan, _ *destinationModel) {
@@ -156,7 +156,7 @@ func TestExpandUpdateSendsOnlyChangedFields(t *testing.T) {
 func TestFlattenKeepsDurableFieldsOnly(t *testing.T) {
 	t.Parallel()
 
-	got, diags := flatten(destinationForTest(t, remoteDestination))
+	got, diags := flatten(destinationForTest(t, remoteDestination), model(t).Prefix)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -165,12 +165,44 @@ func TestFlattenKeepsDurableFieldsOnly(t *testing.T) {
 	}
 }
 
+func TestFlattenPrefix(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		prefix types.String
+		remote string
+		want   string
+	}{
+		{"trailing slash", types.StringValue("kernel/"), "kernel", "kernel/"},
+		{"multiple trailing slashes", types.StringValue("kernel///"), "kernel", "kernel///"},
+		{"canonical", types.StringValue("kernel"), "kernel", "kernel"},
+		{"empty", types.StringValue(""), "", ""},
+		{"drift", types.StringValue("kernel/"), "other", "other"},
+		{"import", types.StringNull(), "kernel", "kernel"},
+		{"unknown", types.StringUnknown(), "kernel", "kernel"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			remote := destinationForTest(t, remoteDestination)
+			remote.Prefix = test.remote
+			got, diags := flatten(remote, test.prefix)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+			if got.Prefix.ValueString() != test.want {
+				t.Fatalf("prefix = %v, want %q", got.Prefix, test.want)
+			}
+		})
+	}
+}
+
 func TestFlattenKMSKey(t *testing.T) {
 	t.Parallel()
 
 	remote := destinationForTest(t, remoteDestination)
 	remote.KmsKeyID = "alias/audit"
-	got, diags := flatten(remote)
+	got, diags := flatten(remote, model(t).Prefix)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -196,7 +228,7 @@ func TestFlattenRejectsMissingRequiredFields(t *testing.T) {
 				t.Fatalf("marshal: %v", err)
 			}
 
-			_, diags := flatten(destinationForTest(t, string(body)))
+			_, diags := flatten(destinationForTest(t, string(body)), model(t).Prefix)
 			if !diags.HasError() {
 				t.Fatalf("missing %s was accepted", field)
 			}

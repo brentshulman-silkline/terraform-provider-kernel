@@ -19,7 +19,7 @@ func TestAccAuditLogExportDestinationLifecycle(t *testing.T) {
 	region := os.Getenv(acctest.EnvAuditExportRegion)
 	roleARN := os.Getenv(acctest.EnvAuditExportRoleARN)
 	prefix := acctest.UniqueName(t, "audit") + "/"
-	updatedPrefix := acctest.UniqueName(t, "audit-updated") + "/"
+	updatedPrefix := acctest.UniqueName(t, "audit-updated")
 	finalConfig := testAccDestinationConfig(bucket, region, updatedPrefix, roleARN, "paused")
 	var destinationID string
 
@@ -42,9 +42,18 @@ func TestAccAuditLogExportDestinationLifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr(destinationResourceName, "format", "jsonl.gz"),
 					resource.TestCheckResourceAttr(destinationResourceName, "bucket", bucket),
 					resource.TestCheckResourceAttr(destinationResourceName, "prefix", prefix),
-					resource.TestCheckResourceAttr(destinationResourceName, "status", "active"),
+					resource.TestCheckResourceAttr(destinationResourceName, "status", "paused"),
+					testAccCheckRemoteStatus("paused"),
 					resource.TestCheckResourceAttrSet(destinationResourceName, "external_id"),
 					resource.TestCheckResourceAttrSet(destinationResourceName, "kernel_role_arn"),
+				),
+			},
+			{
+				Config: testAccDestinationConfig(bucket, region, prefix, roleARN, "active"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCaptureDestinationID(t, &destinationID),
+					resource.TestCheckResourceAttr(destinationResourceName, "status", "active"),
+					testAccCheckRemoteStatus("active"),
 				),
 			},
 			{

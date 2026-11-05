@@ -28,6 +28,9 @@ resource "kernel_audit_log_export_destination" "example" {
   region   = var.region
   prefix   = "kernel/audit-logs/"
   role_arn = var.role_arn
+  # First apply paused, attach the trust policy below, and verify destination
+  # access. Then change this to "active" and apply again to start delivery.
+  status = "paused"
 }
 
 # Attach this trust policy to var.role_arn so Kernel can assume it.

@@ -87,14 +87,19 @@ func (r *destinationResource) Create(ctx context.Context, req tfresource.CreateR
 		return
 	}
 
-	state, diags := flatten(*created)
+	state, diags := flatten(*created, plan.Prefix)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// The create request has no status, so a destination planned as paused
-	// is paused right after it is created.
+	// Keep the created destination in state even if activation fails.
+	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Kernel creates destinations paused; activate only when requested.
 	if !plan.Status.IsUnknown() && !plan.Status.Equal(state.Status) {
 		params := kernel.AuditLogExportDestinationUpdateParams{
 			UpdateAuditLogExportDestinationRequest: kernel.UpdateAuditLogExportDestinationRequestParam{
@@ -103,7 +108,6 @@ func (r *destinationResource) Create(ctx context.Context, req tfresource.CreateR
 		}
 		updated, err := r.client.UpdateAuditLogExportDestination(ctx, state.ID.ValueString(), params)
 		if err != nil || updated == nil {
-			resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 			detail := "Kernel returned an empty response."
 			if err != nil {
 				detail = errorDetail(err)
@@ -115,7 +119,7 @@ func (r *destinationResource) Create(ctx context.Context, req tfresource.CreateR
 			)
 			return
 		}
-		state, diags = flatten(*updated)
+		state, diags = flatten(*updated, plan.Prefix)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
@@ -153,7 +157,7 @@ func (r *destinationResource) Read(ctx context.Context, req tfresource.ReadReque
 		return
 	}
 
-	next, diags := flatten(*remote)
+	next, diags := flatten(*remote, state.Prefix)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -193,7 +197,7 @@ func (r *destinationResource) Update(ctx context.Context, req tfresource.UpdateR
 		return
 	}
 
-	next, diags := flatten(*remote)
+	next, diags := flatten(*remote, plan.Prefix)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
